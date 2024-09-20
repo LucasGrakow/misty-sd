@@ -43,14 +43,14 @@ CLIPG_CONFIG = {
     "textual_inversion_key": "clip_g",
 }
 
-# T5_URL = "https://huggingface.co/AUTOMATIC/stable-diffusion-3-medium-text-encoders/resolve/main/t5xxl_fp16.safetensors"
-# T5_CONFIG = {
-#     "d_ff": 10240,
-#     "d_model": 4096,
-#     "num_heads": 64,
-#     "num_layers": 24,
-#     "vocab_size": 32128,
-# }
+T5_URL = "https://huggingface.co/AUTOMATIC/stable-diffusion-3-medium-text-encoders/resolve/main/t5xxl_fp16.safetensors"
+T5_CONFIG = {
+    "d_ff": 10240,
+    "d_model": 4096,
+    "num_heads": 64,
+    "num_layers": 24,
+    "vocab_size": 32128,
+}
 
 
 class Sd3ClipLG(sd_hijack_clip.TextConditionalModel):
@@ -167,11 +167,10 @@ class SD3Cond(torch.nn.Module):
             self.clip_g = SDXLClipG(CLIPG_CONFIG, device="cpu", dtype=devices.dtype)
             self.clip_l = SDClipModel(layer="hidden", layer_idx=-2, device="cpu", dtype=devices.dtype, layer_norm_hidden_state=False, return_projected_pooled=False, textmodel_json_config=CLIPL_CONFIG)
 
-            # if shared.opts.sd3_enable_t5:
-            #     self.t5xxl = T5XXLModel(T5_CONFIG, device="cpu", dtype=devices.dtype)
-            # else:
-            #     self.t5xxl = None
-            self.t5xxl = None
+            if shared.opts.sd3_enable_t5:
+                self.t5xxl = T5XXLModel(T5_CONFIG, device="cpu", dtype=devices.dtype)
+            else:
+                self.t5xxl = None
 
             self.model_lg = Sd3ClipLG(self.clip_l, self.clip_g)
             self.model_t5 = Sd3T5(self.t5xxl)
@@ -200,10 +199,10 @@ class SD3Cond(torch.nn.Module):
             with safetensors.safe_open(clip_l_file, framework="pt") as file:
                 self.clip_l.transformer.load_state_dict(SafetensorsMapping(file), strict=False)
 
-        # if self.t5xxl and 'text_encoders.t5xxl.transformer.encoder.embed_tokens.weight' not in state_dict:
-        #     t5_file = modelloader.load_file_from_url(T5_URL, model_dir=clip_path, file_name="t5xxl_fp16.safetensors")
-        #     with safetensors.safe_open(t5_file, framework="pt") as file:
-        #         self.t5xxl.transformer.load_state_dict(SafetensorsMapping(file), strict=False)
+        if self.t5xxl and 'text_encoders.t5xxl.transformer.encoder.embed_tokens.weight' not in state_dict:
+            t5_file = modelloader.load_file_from_url(T5_URL, model_dir=clip_path, file_name="t5xxl_fp16.safetensors")
+            with safetensors.safe_open(t5_file, framework="pt") as file:
+                self.t5xxl.transformer.load_state_dict(SafetensorsMapping(file), strict=False)
 
     def encode_embedding_init_text(self, init_text, nvpt):
         return self.model_lg.encode_embedding_init_text(init_text, nvpt)
